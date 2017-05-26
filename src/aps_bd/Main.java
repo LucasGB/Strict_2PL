@@ -29,7 +29,7 @@ public class Main {
     public static void main(String[] args) {       
         Connection conn = new ConnectionHelper().getConnection();
         Schedule schedule = new Schedule();              
-        Controller controller = new Controller();
+        Scheduler controller = new Scheduler();
         
         try {
             ResultSet rs;
@@ -54,7 +54,10 @@ public class Main {
                 controller.startScheduling();                
             } while(rs.next());          
             
-            controller.startScheduling();    
+            while(!controller.getReady_list().isEmpty()){
+                controller.startScheduling();
+            }
+               
             controller.printFinishedList();
             controller.printWaitList();
             controller.printReadyList();

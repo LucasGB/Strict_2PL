@@ -1,0 +1,4 @@
+insert into schedule (indicetransacao, operacao, itemdado, timestamp) 
+VALUES 
+(1, 'B', NULL, '1_1), (1, 'R', 'A', '1_1'), (2, 'B', NULL, '1_1), (2, 'R', 'B','1_1'), (2, 'W', 'A', '1_1), (3, 'B', NULL,'1_1'), 
+(3, R, 'C', '1_1'), (3, 'W', 'D', '1_1), (1, 'W', 'B', '1_1'), (1, 'E', NULL, '1_1'), (2, 'E', NULL, '1_1'), (3, 'E', NULL, '1_1');

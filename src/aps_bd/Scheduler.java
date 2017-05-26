@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
  *
  * @author lucasgb
  */
-public class Controller {
+public class Scheduler {
 
     private ArrayList<Transaction> ready_list;
     private ArrayList<Transaction> finished_list;
@@ -22,7 +22,7 @@ public class Controller {
 
     private ArrayList<Lock> locks;
 
-    public Controller() {
+    public Scheduler() {
         this.finished_list = new ArrayList<Transaction>();
         this.ready_list = new ArrayList<Transaction>();
         this.wait_list = new ArrayList<Transaction>();
