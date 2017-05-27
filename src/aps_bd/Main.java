@@ -57,6 +57,11 @@ public class Main {
             while(!controller.getReady_list().isEmpty()){
                 controller.startScheduling();
             }
+            
+            // Trata o fenomeno Senpai
+            while(!controller.getWait_list().isEmpty()){
+                controller.senpai();
+            }
                
             controller.printFinishedList();
             controller.printWaitList();

@@ -52,17 +52,25 @@ public class Scheduler {
     }
     
     public void Process_E(Transaction t){
+        
         ArrayList<Data> aux = new ArrayList<Data>();
-            ArrayList<Transaction> aux2 = new ArrayList<Transaction>();
-            ArrayList<Lock> l = new ArrayList<Lock>();
-            int flag = 0;
+        ArrayList<Transaction> aux2 = new ArrayList<Transaction>();
+        ArrayList<Lock> l = new ArrayList<Lock>();
+        int flag = 0;
 
             /*
              * Verifica se existe algum dado na fila de espera antes de comitar
             */
-            for (Transaction w : wait_list) {
+            for (Transaction w : getWait_list()) {
                 if (w.getLabel().equals(t.getLabel())) {                    
                     flag = 1;                    
+                }
+            }
+            
+            for(int i = 1; i < ready_list.size(); i++){
+                if(ready_list.get(i).getLabel().equals(t.getLabel())){
+                    flag = 1;
+                    break;
                 }
             }
             /*
@@ -70,18 +78,17 @@ public class Scheduler {
             */
             if (flag == 0) {
                 aux = getDatasLockedBy(t.getLabel());
-
+                
                 for (Data d : aux) {
-                    for (Transaction w : wait_list) {
+                    for (Transaction w : getWait_list()) {
                         if (w.getOperation().getData().getLabel().equals(d.getLabel())) {
                             aux2.add(w);
                         }
                     }                   
                     ready_list.addAll(aux2);
-                    wait_list.removeAll(aux2);
-                    aux2.clear();
+                    getWait_list().removeAll(aux2);
+                    aux2.clear();                
                 }
-                
                 l = getLocksLockedBy(t.getLabel());
                 locks.removeAll(l);
                 aux.clear();
@@ -95,6 +102,7 @@ public class Scheduler {
             if (flag == 1) {
                 wait_list.add(t);
                 ready_list.remove(t);
+                flag = 0;
             }
     }
 
@@ -103,23 +111,24 @@ public class Scheduler {
                 locks.add(new Lock(t.getLabel(), op.getData(), Lock.TYPE.LS));
                 finished_list.add(t);
                 ready_list.remove(t);
-
-                //break;
-            } /*
-                 * Se o dado está na lista de bloqueio compartilhado OU
-                 * o dado foi bloqueado exclusivamente e a transação é o dono do mesmo, 
-                 * escalona a operação(coloca na lista de terminados) e a retira da lista de prontos
-             */ else if (isLockedS(op.getData())
+        }
+        /*
+         * Se o dado está na lista de bloqueio compartilhado OU
+         * o dado foi bloqueado exclusivamente e a transação é o dono do mesmo, 
+         * escalona a operação(coloca na lista de terminados) e a retira da lista de prontos
+         */
+        else if (isLockedS(op.getData())
                     || isLockedXBy(t.getLabel(), op.getData())) {
-                finished_list.add(t);
-                ready_list.remove(t);
-                //break;
-            } /*
-                 * O dado foi bloqueado exclusivamente por outra transação que está executando
-             */ else {
-                wait_list.add(t);
-                ready_list.remove(t);
-            }
+            finished_list.add(t);
+            ready_list.remove(t);        
+        }
+        /*
+         * O dado foi bloqueado exclusivamente por outra transação que está executando
+         */
+        else {
+            getWait_list().add(t);
+            ready_list.remove(t);
+        }
     }
     
     public void Process_W(Transaction t, Operation op){
@@ -127,29 +136,41 @@ public class Scheduler {
                 locks.add(new Lock(t.getLabel(), op.getData(), Lock.TYPE.LX));
                 finished_list.add(t);
                 ready_list.remove(t);
-            } /*
-                 * Se o dado foi bloqueado exclusivamente e a transação em questão é o dono,
-                 * escalona a operação e a tira da lista de prontos
-             */ else if (isLockedXBy(t.getLabel(), op.getData())) {
+        }
+        /*
+         * Se o dado foi bloqueado exclusivamente e a transação em questão é o dono,
+         * escalona a operação e a tira da lista de prontos
+        */
+        else if (isLockedXBy(t.getLabel(), op.getData())) {
+            finished_list.add(t);
+            ready_list.remove(t);
+        }
+        /*
+         * Se o dado está na lista de bloqueio compartilhado e a transação atual é a dona do mesmo,
+         * armazeno o dado no bloqueio exclusivo e retiro do bloqueio compartilhado, e escalono a operação
+         */
+        else if (isLockedSBy(t.getLabel(), op.getData())) {
+            if (getTransactionsByDataCount(op.getData()) <= 1
+                    && isLockedBy(t.getLabel(), op.getData())) {
+                switchLock(t.getLabel(), op.getData());
                 finished_list.add(t);
                 ready_list.remove(t);
-            } /*
-                 * Se o dado está na lista de bloqueio compartilhado e a transação atual é a dona do mesmo,
-                 * armazeno o dado no bloqueio exclusivo e retiro do bloqueio compartilhado, e escalono a operação
-             */ else if (isLockedSBy(t.getLabel(), op.getData())) {
-                if (getTransactionsByDataCount(op.getData()) <= 1
-                        && isLockedBy(t.getLabel(), op.getData())) {
-                    switchLock(t.getLabel(), op.getData());
-                    finished_list.add(t);
-                    ready_list.remove(t);
-                } else {
-                    wait_list.add(t);
-                    ready_list.remove(t);
-                }
-            } else {
-                ready_list.remove(t);
-                wait_list.add(t);
             }
+            else {
+                getWait_list().add(t);
+                ready_list.remove(t);
+            }
+        }
+        else {
+            ready_list.remove(t);
+            getWait_list().add(t);
+        }
+    }
+    
+    public void senpai(){
+        ready_list.add(wait_list.get(0));
+        wait_list.remove(0);
+        startScheduling();
     }
     
     public boolean isLocked(String transaction, Data data) {
@@ -183,11 +204,9 @@ public class Scheduler {
     }
 
     public boolean isLockedS(Data data) {
-        for (Lock lock : locks) {
-            if (lock.getData().getLabel().equals(data.getLabel())
-                    && lock.getType() == Lock.TYPE.LS) {
-                return true;
-            }
+        if (locks.stream().anyMatch((lock) -> (lock.getData().getLabel().equals(data.getLabel())
+                && lock.getType() == Lock.TYPE.LS))) {
+            return true;
         }
         return false;
     }
@@ -289,4 +308,11 @@ public class Scheduler {
         }
         return aux.stream().distinct().collect(Collectors.toList()).size();
     }        
+
+    /**
+     * @return the wait_list
+     */
+    public ArrayList<Transaction> getWait_list() {
+        return wait_list;
+    }
 }
