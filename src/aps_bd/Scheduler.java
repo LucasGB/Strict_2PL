@@ -1,13 +1,14 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package aps_bd;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
@@ -21,12 +22,16 @@ public class Scheduler {
     private ArrayList<Transaction> wait_list;
 
     private ArrayList<Lock> locks;
+    
+    private static Connection conn;
 
     public Scheduler() {
         this.finished_list = new ArrayList<Transaction>();
         this.ready_list = new ArrayList<Transaction>();
         this.wait_list = new ArrayList<Transaction>();
         this.locks = new ArrayList<Lock>();
+        
+        conn = Singleton.getInstance();
     }
 
     public void startScheduling() {
@@ -67,6 +72,10 @@ public class Scheduler {
                 }
             }
             
+            /*
+             * Verifica se existe uma operação da mesma transação que o commit.
+             * Se sim, coloca o commit na lista de espera.
+             */
             for(int i = 1; i < ready_list.size(); i++){
                 if(ready_list.get(i).getLabel().equals(t.getLabel())){
                     flag = 1;
@@ -94,6 +103,7 @@ public class Scheduler {
                 aux.clear();
                 ready_list.remove(t);
                 finished_list.add(t);
+                writeToDB();
             }
             
             /*
@@ -111,6 +121,7 @@ public class Scheduler {
                 locks.add(new Lock(t.getLabel(), op.getData(), Lock.TYPE.LS));
                 finished_list.add(t);
                 ready_list.remove(t);
+                writeToDB();
         }
         /*
          * Se o dado está na lista de bloqueio compartilhado OU
@@ -120,7 +131,8 @@ public class Scheduler {
         else if (isLockedS(op.getData())
                     || isLockedXBy(t.getLabel(), op.getData())) {
             finished_list.add(t);
-            ready_list.remove(t);        
+            ready_list.remove(t);    
+            writeToDB();
         }
         /*
          * O dado foi bloqueado exclusivamente por outra transação que está executando
@@ -132,10 +144,12 @@ public class Scheduler {
     }
     
     public void Process_W(Transaction t, Operation op){
+        
         if (!isLocked(t.getLabel(), op.getData())) {
                 locks.add(new Lock(t.getLabel(), op.getData(), Lock.TYPE.LX));
                 finished_list.add(t);
                 ready_list.remove(t);
+                writeToDB();
         }
         /*
          * Se o dado foi bloqueado exclusivamente e a transação em questão é o dono,
@@ -144,6 +158,7 @@ public class Scheduler {
         else if (isLockedXBy(t.getLabel(), op.getData())) {
             finished_list.add(t);
             ready_list.remove(t);
+            writeToDB();
         }
         /*
          * Se o dado está na lista de bloqueio compartilhado e a transação atual é a dona do mesmo,
@@ -155,6 +170,7 @@ public class Scheduler {
                 switchLock(t.getLabel(), op.getData());
                 finished_list.add(t);
                 ready_list.remove(t);
+                writeToDB();
             }
             else {
                 getWait_list().add(t);
@@ -167,6 +183,7 @@ public class Scheduler {
         }
     }
     
+    // Trata um problema que ocorria quando o E de uma transação colocava na lista de espera o programa encerrava a execução.
     public void senpai(){
         ready_list.add(wait_list.get(0));
         wait_list.remove(0);
@@ -175,7 +192,7 @@ public class Scheduler {
     
     public boolean isLocked(String transaction, Data data) {
         for (Lock lock : locks) {
-            if (lock.getData().getLabel().charAt(0) == data.getLabel().charAt(0)) {
+            if (lock.getData().getLabel().equals(data.getLabel())) {
                 return true;
             }
         }
@@ -314,5 +331,34 @@ public class Scheduler {
      */
     public ArrayList<Transaction> getWait_list() {
         return wait_list;
+    }
+
+    /**
+     * @return the finished_list
+     */
+    public ArrayList<Transaction> getFinishedList() {
+        return finished_list;
+    }
+    
+    public void writeToDB(){
+        Transaction output = finished_list.get(finished_list.size() -1);
+        
+        try{
+            PreparedStatement stm = conn.prepareStatement("INSERT INTO output (indiceTransacao,"
+                                                                           + "operacao,"
+                                                                           + "itemDado,"
+                                                                           + "timestampj)"
+                                                                           + "VALUES"
+                                                                           + "(?, ?, ?, ?);");
+            stm.setString(1, output.getLabel());
+            stm.setString(2, output.getOperation().getOperation_type());
+            stm.setString(3, output.getOperation().getData().getLabel());
+            stm.setString(4, new SimpleDateFormat("yyyyMMdd_HHmmss").format(output.getOperation().getTimestamp()));
+            stm.executeUpdate();
+            stm.close();
+        } catch (SQLException e){
+            Logger.getLogger(Consumer.class.getName()).log(Level.SEVERE, null, e);
+        }
+        
     }
 }
